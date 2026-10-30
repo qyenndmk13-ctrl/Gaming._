@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dungeon Adventure Ultimate RPG</title>
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;padding:12px;background:#10111c;color:white;
+ font-family:monospace;text-align:center
+}
+h1{color:#facc15;text-shadow:3px 3px #713f12}
+#stats{
+ display:flex;justify-content:center;flex-wrap:wrap;gap:7px;
+ margin:12px auto
+}
+.stat{background:#292b40;padding:9px;border-radius:7px}
+canvas{
+ width:min(100%,640px);height:auto;
+ border:5px solid #98734d;image-rendering:pixelated;
+ background:#171717
+}
+button{
+ background:#713bea;color:white;border:0;border-radius:8px;
+ padding:12px;margin:4px;font-weight:bold;cursor:pointer;
+ touch-action:none
+}
+button:active{background:#a78bfa}
+#message{color:#facc15;min-height:24px;margin:10px}
+#bossArea{max-width:640px;margin:8px auto;display:none}
+.bar{height:15px;background:#501b24;border-radius:8px;overflow:hidden}
+#bossHP{height:100%;width:100%;background:#ef4444}
+#controls{
+ display:flex;justify-content:center;align-items:center;
+ gap:18px;margin:15px auto;flex-wrap:wrap
+}
+.pad{display:grid;grid-template-columns:repeat(3,48px);gap:4px}
+.pad button{margin:0;padding:13px 0;font-size:18px}
+.skills{display:grid;grid-template-columns:repeat(2,85px);gap:5px}
+.skills button{margin:0;padding:12px 3px}
+#shop{
+ max-width:500px;margin:12px auto;background:#292b40;
+ padding:12px;border-radius:10px
+}
+small{color:#aaa}
+</style>
+</head>
+<body>
+
+<h1>⚔ DUNGEON ADVENTURE ⚔</h1>
+<h3 style="color:#c084fc">ULTIMATE RPG EDITION</h3>
+
+<div id="stats">
+ <span class="stat" id="hp">❤️ HP: 100</span>
+ <span class="stat" id="mp">🔵 MP: 100</span>
+ <span class="stat" id="coin">💰 0</span>
+ <span class="stat" id="level">🏰 Level: 1</span>
+ <span class="stat" id="exp">⭐ EXP: 0</span>
+ <span class="stat" id="weapon">⚔ ATK: 10</span>
+</div>
+
+<div id="bossArea">
+ <b id="bossName">BOSS</b>
+ <div class="bar"><div id="bossHP"></div></div>
+ <small id="bossText"></small>
+</div>
+
+<canvas id="game" width="640" height="480"></canvas>
+<div id="message">Jelajahi dungeon dan kalahkan semua boss!</div>
+
+<div id="controls">
+ <div class="pad">
+  <span></span><button data-key="ArrowUp">⬆</button><span></span>
+  <button data-key="ArrowLeft">⬅</button>
+  <button data-key="ArrowDown">⬇</button>
+  <button data-key="ArrowRight">➡</button>
+ </div>
+ <div class="skills">
+  <button id="attack">⚔ ATTACK</button>
+  <button id="fire">🔥 FIREBALL</button>
+  <button id="thunder">⚡ THUNDER</button>
+  <button id="heal">💚 HEAL</button>
+ </div>
+</div>
+
+<div id="shop">
+ <h3>🛒 BLACKSMITH</h3>
+ <button id="sword">⚔ Upgrade Sword (30)</button>
+ <button id="armor">🛡 Upgrade Armor (40)</button>
+ <button id="potion">🧪 Buy Potion (15)</button>
+ <p id="items">Potion: 3</p>
+</div>
+
+<p><small>
+WASD / Arrow: Bergerak | SPACE: Attack |
+1: Fireball | 2: Thunder | 3: Heal
+</small></p>
+
+<button onclick="restart()">🔄 RESTART</button>
+
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+const TILE=32,COLS=20,ROWS=15;
+
+const maps=[
+ {
+  name:"🌲 ENCHANTED FOREST",
+  floor:"#263b2b",wall:"#15351f",accent:"#4ade80",
+  boss:"FOREST GUARDIAN",bossColor:"#16a34a",
+  rows:[
+  "####################",
+  "#..................#",
+  "#..##..............#",
+  "#..##....###.......#",
+  "#.................##",
+  "#....####..........#",
+  "#.............##...#",
+  "#..###.............#",
+  "#...........###....#",
+  "#..................#",
+  "#......##..........#",
+  "#......##.....##...#",
+  "#.................E#",
+  "#..................#",
+  "####################"]
+ },
+ {
+  name:"❄️ FROZEN CAVE",
+  floor:"#26384b",wall:"#172b48",accent:"#7dd3fc",
+  boss:"ICE DRAGON",bossColor:"#38bdf8",
+  rows:[
+  "####################",
+  "#..................#",
+  "#.####.............#",
+  "#....#......###....#",
+  "#....#.............#",
+  "#.........####.....#",
+  "#..................#",
+  "#..####............#",
+  "#...........####...#",
+  "#..................#",
+  "#.....####.........#",
+  "#..............##..#",
+  "#.................E#",
+  "#..................#",
+  "####################"]
+ },
+ {
+  name:"🔥 LAVA KINGDOM",
+  floor:"#49302b",wall:"#291a24",accent:"#fb923c",
+  boss:"LAVA TITAN",bossColor:"#f97316",
+  rows:[
+  "####################",
+  "#..................#",
+  "#..###.............#",
+  "#......####........#",
+  "#..................#",
+  "#....####.....##...#",
+  "#..................#",
+  "#..##..............#",
+  "#.......####.......#",
+  "#..................#",
+  "#.....##...........#",
+  "#.....##.....##....#",
+  "#.................E#",
+  "#..................#",
+  "####################"]
+ },
+ {
+  name:"🏰 DARK CASTLE",
+  floor:"#343047",wall:"#171629",accent:"#c084fc",
+  boss:"SHADOW KNIGHT",bossColor:"#9333ea",
+  rows:[
+  "####################",
+  "#..................#",
+  "#..####............#",
+  "#......##..........#",
+  "#..........####....#",
+  "#..................#",
+  "#....####..........#",
+  "#..................#",
+  "#.........####.....#",
+  "#..................#",
+  "#..###.............#",
+  "#..............##..#",
+  "#.................E#",
+  "#..................#",
+  "####################"]
+ },
+ {
+  name:"💀 DEMON ABYSS",
+  floor:"#38212c",wall:"#1c1020",accent:"#f472b6",
+  boss:"DEMON OVERLORD",bossColor:"#dc2626",
+  rows:[
+  "####################",
+  "#..................#",
+  "#..##..............#",
+  "#.....####.........#",
+  "#..................#",
+  "#.......####.......#",
+  "#..................#",
+  "#..####............#",
+  "#.............##...#",
+  "#..................#",
+  "#......##..........#",
+  "#......##.....##...#",
+  "#.................E#",
+  "#..................#",
+  "####################"]
+ }
+];
+
+let keys={};
+let player;
+let monsters=[];
+let treasures=[];
+let exit;
+let hp=100,maxHp=100,mp=100,maxMp=100;
+let coins=0,exp=0,level=1;
+let atk=10,armor=0,potions=3;
+let gameOver=false,won=false;
+let attackCooldown=0;
+let skillCooldown={fire:0,thunder:0,heal:0};
+let effects=[];
+let lastTime=0;
+let currentMap=0;
+let bossAlive=false;
+
+const mapsLength=maps.length;
+
+function say(text){
+ document.getElementById("message").textContent=text;
+}
+
+function createLevel(){
+ currentMap=level-1;
+ let map=maps[currentMap];
+
+ player={
+  x:64,y:64,size:22,speed:3,
+  direction:"right"
+ };
+
+ monsters=[];
+ treasures=[];
+ effects=[];
+
+ exit={x:18*TILE,y:12*TILE};
+
+ let positions=[
+  [400,100],[200,350],[500,300],
+  [350,400],[480,180],[150,250],
+  [530,350],[300,100]
+ ];
+
+ let count=2+level;
+
+ for(let i=0;i<count;i++){
+  let p=positions[i%positions.length];
+
+  monsters.push({
+   x:p[0],y:p[1],
+   hp:20+level*8,
+   maxHp:20+level*8,
+   speed:0.65+level*.13,
+   damage:0.12+level*.04,
+   boss:false,
+   color:"#dc2626",
+   name:"Monster"
+  });
+ }
+
+ // BOSS DI SETIAP DUNGEON
+ let bossHp=180+level*70;
+
+ monsters.push({
+  x:480,y:350,
+  hp:bossHp,maxHp:bossHp,
+  speed:1+level*.12,
+  damage:.35+level*.08,
+  boss:true,
+  color:map.bossColor,
+  name:map.boss
+ });
+
+ bossAlive=true;
+
+ for(let i=0;i<6;i++){
+  treasures.push({
+   x:(2+i*2.5)*TILE,
+   y:(8+(i%2)*2)*TILE,
+   collected:false
+  });
+ }
+
+ say(map.name+" - Kalahkan Boss!");
+ updateUI();
+}
+
+function drawMap(){
+ let map=maps[currentMap];
+
+ for(let y=0;y<ROWS;y++){
+  for(let x=0;x<COLS;x++){
+   let wall=map.rows[y][x]==="#";
+
+   ctx.fillStyle=wall?map.wall:map.floor;
+   ctx.fillRect(x*TILE,y*TILE,TILE,TILE);
+
+   if(wall){
+    ctx.fillStyle=map.accent;
+    ctx.globalAlpha=.2;
+    ctx.fillRect(x*TILE+3,y*TILE+3,25,5);
+    ctx.globalAlpha=1;
+   }else{
+    ctx.fillStyle=map.accent;
+    ctx.globalAlpha=.12;
+    ctx.fillRect(x*TILE+8,y*TILE+9,3,3);
+    ctx.globalAlpha=1;
+   }
+
+   ctx.strokeStyle="#111827";
+   ctx.strokeRect(x*TILE,y*TILE,TILE,TILE);
+  }
+ }
+}
+
+function drawPlayer(){
+ ctx.fillStyle="#38bdf8";
+ ctx.fillRect(player.x,player.y,22,22);
+
+ ctx.fillStyle="#fcd34d";
+ ctx.fillRect(player.x+4,player.y-7,14,9);
+
+ ctx.fillStyle="#111";
+ ctx.fillRect(player.x+5,player.y+3,4,4);
+ ctx.fillRect(player.x+14,player.y+3,4,4);
+
+ if(attackCooldown>10){
+  ctx.fillStyle="#fff";
+  let x=player.x,y=player.y;
+  if(player.direction==="right")ctx.fillRect(x+22,y+7,25,6);
+  if(player.direction==="left")ctx.fillRect(x-25,y+7,25,6);
+  if(player.direction==="up")ctx.fillRect(x+7,y-25,6,25);
+  if(player.direction==="down")ctx.fillRect(x+7,y+22,6,25);
+ }
+}
+
+function drawMonsters(){
+ monsters.forEach(m=>{
+  let s=m.boss?42:25;
+
+  ctx.fillStyle=m.color;
+  ctx.fillRect(m.x,m.y,s,s);
+
+  ctx.fillStyle="white";
+  ctx.fillRect(m.x+5,m.y+6,6,6);
+  ctx.fillRect(m.x+s-11,m.y+6,6,6);
+
+  ctx.fillStyle="#111";
+  ctx.fillRect(m.x+7,m.y+8,3,3);
+  ctx.fillRect(m.x+s-9,m.y+8,3,3);
+
+  ctx.fillStyle="#450a0a";
+  ctx.fillRect(m.x,m.y-9,s,5);
+
+  ctx.fillStyle="#22c55e";
+  ctx.fillRect(m.x,m.y-9,s*Math.max(0,m.hp/m.maxHp),5);
+
+  if(m.boss){
+   ctx.fillStyle="#facc15";
+   ctx.font="bold 11px monospace";
+   ctx.fillText("BOSS",m.x,m.y-14);
+  }
+ });
+}
+
+function drawTreasures(){
+ treasures.forEach(t=>{
+  if(t.collected)return;
+
+  ctx.fillStyle="#facc15";
+  ctx.fillRect(t.x,t.y,18,18);
+
+  ctx.fillStyle="#fff";
+  ctx.fillRect(t.x+4,t.y+4,5,5);
+ });
+}
+
+function drawExit(){
+ ctx.fillStyle="#22c55e";
+ ctx.fillRect(exit.x,exit.y,28,28);
+ ctx.fillStyle="#14532d";
+ ctx.fillRect(exit.x+7,exit.y+5,14,23);
+}
+
+function drawEffects(){
+ effects.forEach(e=>{
+  ctx.globalAlpha=Math.max(0,e.life/e.maxLife);
+  ctx.fillStyle=e.color;
+  ctx.beginPath();
+  ctx.arc(e.x,e.y,e.radius*(1-e.life/e.maxLife)+5,0,Math.PI*2);
+  ctx.fill();
+  ctx.globalAlpha=1;
+ });
+}
+
+function isWall(x,y){
+ let s=player.size;
+ let pts=[[x,y],[x+s,y],[x,y+s],[x+s,y+s]];
+
+ return pts.some(([px,py])=>{
+  return maps[currentMap].rows[Math.floor(py/TILE)]?.[Math.floor(px/TILE)]==="#";
+ });
+}
+
+function movePlayer(dt){
+ if(gameOver||won)return;
+
+ let dx=0,dy=0;
+
+ if(keys.ArrowUp||keys.w)dy=-1;
+ if(keys.ArrowDown||keys.s)dy=1;
+ if(keys.ArrowLeft||keys.a)dx=-1;
+ if(keys.ArrowRight||keys.d)dx=1;
+
+ if(dx&&dy){dx*=.707;dy*=.707;}
+
+ if(dx>0)player.direction="right";
+ if(dx<0)player.direction="left";
+ if(dy>0)player.direction="down";
+ if(dy<0)player.direction="up";
+
+ let speed=player.speed*dt;
+
+ if(!isWall(player.x+dx*speed,player.y))player.x+=dx*speed;
+ if(!isWall(player.x,player.y+dy*speed))player.y+=dy*speed;
+}
+
+function damageMonster(m,damage){
+ m.hp-=damage;
+
+ effects.push({
+  x:m.x+15,y:m.y+15,
+  radius:24,color:"#facc15",
+  life:12,maxLife:12
+ });
+
+ if(m.hp<=0){
+  coins+=m.boss?100+level*30:10;
+  exp+=m.boss?100:20;
+  if(m.boss){
+   bossAlive=false;
+   say("BOSS DIKALAHKAN! +BONUS!");
+  }else{
+   say("Monster dikalahkan!");
+  }
+  return true;
+ }
+ return false;
+}
+
+function attack(){
+ if(gameOver||won||attackCooldown>0)return;
+
+ attackCooldown=20;
+
+ monsters=monsters.filter(m=>{
+  let dx=player.x-m.x;
+  let dy=player.y-m.y;
+  let dist=Math.hypot(dx,dy);
+
+  let facing=
+   (player.direction==="right"&&m.x>=player.x)||
+   (player.direction==="left"&&m.x<=player.x)||
+   (player.direction==="up"&&m.y<=player.y)||
+   (player.direction==="down"&&m.y>=player.y);
+
+  if(dist<80&&facing){
+   return !damageMonster(m,atk);
+  }
+  return true;
+ });
+}
+
+function castFire(){
+ if(gameOver||won||skillCooldown.fire>0)return;
+ if(mp<25){say("MP tidak cukup!");return;}
+
+ mp-=25;
+ skillCooldown.fire=90;
+
+ effects.push({
+  x:player.x+11,y:player.y+11,
+  radius:95,color:"#fb923c",
+  life:25,maxLife:25
+ });
+
+ monsters=monsters.filter(m=>{
+  let dist=Math.hypot(player.x-m.x,player.y-m.y);
+  if(dist<120)return !damageMonster(m,atk*2+15);
+  return true;
+ });
+
+ say("🔥 FIREBALL!");
+}
+
+function castThunder(){
+ if(gameOver||won||skillCooldown.thunder>0)return;
+ if(mp<40){say("MP tidak cukup!");return;}
+
+ mp-=40;
+ skillCooldown.thunder=150;
+
+ effects.push({
+  x:player.x+11,y:player.y+11,
+  radius:150,color:"#60a5fa",
+  life:30,maxLife:30
+ });
+
+ monsters=monsters.filter(m=>{
+  let dist=Math.hypot(player.x-m.x,player.y-m.y);
+  if(dist<170)return !damageMonster(m,atk*3+30);
+  return true;
+ });
+
+ say("⚡ THUNDER STRIKE!");
+}
+
+function castHeal(){
+ if(gameOver||won||skillCooldown.heal>0)return;
+ if(mp<30){say("MP tidak cukup!");return;}
+ if(hp>=maxHp){say("HP masih penuh!");return;}
+
+ mp-=30;
+ hp=Math.min(maxHp,hp+45);
+ skillCooldown.heal=180;
+
+ effects.push({
+  x:player.x+11,y:player.y+11,
+  radius:65,color:"#4ade80",
+  life:30,maxLife:30
+ });
+
+ say("💚 HEALING MAGIC!");
+}
+
+function updateMonsters(dt){
+ monsters.forEach(m=>{
+  let dx=player.x-m.x;
+  let dy=player.y-m.y;
+  let dist=Math.hypot(dx,dy);
+
+  if(dist<270&&dist>1){
+   let nx=m.x+dx/dist*m.speed*dt;
+   let ny=m.y+dy/dist*m.speed*dt;
+
+   let tx=Math.floor(nx/TILE);
+   let ty=Math.floor(ny/TILE);
+
+   if(maps[currentMap].rows[ty]?.[tx]!== "#"){
+    m.x=nx;
+    m.y=ny;
+   }
+  }
+
+  if(dist<(m.boss?47:27)){
+   hp-=Math.max(.02,m.damage-armor*.015)*dt;
+
+   if(hp<=0){
+    hp=0;
+    gameOver=true;
+    say("GAME OVER! Petualangan berakhir.");
+   }
+  }
+ });
+}
+
+function collectTreasures(){
+ treasures.forEach(t=>{
+  if(!t.collected&&Math.hypot(player.x-t.x,player.y-t.y)<30){
+   t.collected=true;
+   coins+=10;
+   say("💰 Treasure ditemukan! +10 Coin");
+  }
+ });
+}
+
+function checkExit(){
+ let dist=Math.hypot(player.x-exit.x,player.y-exit.y);
+
+ if(dist<30){
+  if(bossAlive){
+   say("Kalahkan BOSS sebelum membuka portal!");
+   return;
+  }
+
+  if(level<5){
+   level++;
+   hp=Math.min(maxHp,hp+25);
+   mp=Math.min(maxMp,mp+35);
+   createLevel();
+  }else{
+   won=true;
+   say("🏆 KAMU MENAKLUKKAN SEMUA DUNGEON!");
+  }
+ }
+}
+
+function updateEffects(dt){
+ effects.forEach(e=>e.life-=dt);
+ effects=effects.filter(e=>e.life>0);
+
+ attackCooldown=Math.max(0,attackCooldown-dt);
+
+ for(let k in skillCooldown){
+  skillCooldown[k]=Math.max(0,skillCooldown[k]-dt);
+ }
+
+ mp=Math.min(maxMp,mp+.025*dt);
+}
+
+function updateUI(){
+ document.getElementById("hp").textContent=
+ "❤️ HP: "+Math.ceil(hp)+"/"+maxHp;
+ document.getElementById("mp").textContent=
+ "🔵 MP: "+Math.floor(mp)+"/"+maxMp;
+ document.getElementById("coin").textContent="💰 "+coins;
+ document.getElementById("level").textContent="🏰 Level: "+level;
+ document.getElementById("exp").textContent="⭐ EXP: "+exp;
+ document.getElementById("weapon").textContent="⚔ ATK: "+atk;
+
+ document.getElementById("items").textContent=
+ "Potion: "+potions+" | Armor: "+armor;
+
+ let boss=monsters.find(m=>m.boss);
+ document.getElementById("bossArea").style.display=
+ boss?"block":"none";
+
+ if(boss){
+  document.getElementById("bossName").textContent=boss.name;
+  document.getElementById("bossHP").style.width=
+  Math.max(0,boss.hp/boss.maxHp*100)+"%";
+  document.getElementById("bossText").textContent=
+  Math.ceil(boss.hp)+" / "+boss.maxHp+" HP";
+ }
+
+ document.getElementById("fire").textContent=
+ "🔥 FIREBALL "+(skillCooldown.fire>0?"⏳":"");
+
+ document.getElementById("thunder").textContent=
+ "⚡ THUNDER "+(skillCooldown.thunder>0?"⏳":"");
+
+ document.getElementById("heal").textContent=
+ "💚 HEAL "+(skillCooldown.heal>0?"⏳":"");
+}
+
+function drawMiniMap(){
+ let scale=4;
+ let ox=canvas.width-90,oy=8;
+
+ ctx.fillStyle="rgba(0,0,0,.7)";
+ ctx.fillRect(ox-4,oy-4,84,64);
+
+ for(let y=0;y<ROWS;y++){
+  for(let x=0;x<COLS;x++){
+   ctx.fillStyle=maps[currentMap].rows[y][x]==="#"?
+   "#777":"#333";
+   ctx.fillRect(ox+x*scale*.2,oy+y*scale*.2,2,2);
+  }
+ }
+
+ ctx.fillStyle="#38bdf8";
+ ctx.fillRect(ox+player.x/TILE*4,oy+player.y/TILE*4,4,4);
+ ctx.fillStyle="#22c55e";
+ ctx.fillRect(ox+18*4,oy+12*4,4,4);
+}
+
+function draw(){
+ ctx.clearRect(0,0,640,480);
+
+ drawMap();
+ drawExit();
+ drawTreasures();
+ drawMonsters();
+ drawEffects();
+ drawPlayer();
+ drawMiniMap();
+
+ if(gameOver||won){
+  ctx.fillStyle="rgba(0,0,0,.85)";
+  ctx.fillRect(0,0,640,480);
+
+  ctx.textAlign="center";
+  ctx.fillStyle=won?"#facc15":"#ef4444";
+  ctx.font="bold 34px monospace";
+  ctx.fillText(won?"VICTORY!":"GAME OVER",320,200);
+
+  ctx.fillStyle="white";
+  ctx.font="17px monospace";
+  ctx.fillText("Dungeon: "+level+"/5",320,245);
+  ctx.fillText("Coins: "+coins,320,275);
+  ctx.fillText("EXP: "+exp,320,305);
+  ctx.textAlign="left";
+ }
+
+ ctx.fillStyle="white";
+ ctx.font="14px monospace";
+ ctx.fillText(maps[currentMap].name,10,20);
+}
+
+function loop(time=0){
+ let dt=Math.min((time-lastTime)/16.67,2);
+ lastTime=time;
+
+ if(!gameOver&&!won){
+  movePlayer(dt);
+  updateMonsters(dt);
+  collectTreasures();
+  checkExit();
+  updateEffects(dt);
+  updateUI();
+ }
+
+ draw();
+ requestAnimationFrame(loop);
+}
+
+// SHOP
+document.getElementById("sword").onclick=()=>{
+ if(coins>=30){
+  coins-=30;atk+=5;
+  say("Sword berhasil ditingkatkan!");
+ }else say("Coin tidak cukup!");
+ updateUI();
+};
+
+document.getElementById("armor").onclick=()=>{
+ if(coins>=40){
+  coins-=40;armor++;
+  say("Armor berhasil ditingkatkan!");
+ }else say("Coin tidak cukup!");
+ updateUI();
+};
+
+document.getElementById("potion").onclick=()=>{
+ if(coins>=15){
+  coins-=15;potions++;
+  say("Potion berhasil dibeli!");
+ }else say("Coin tidak cukup!");
+ updateUI();
+};
+
+// POTION
+function usePotion(){
+ if(potions<=0){say("Potion habis!");return;}
+ if(hp>=maxHp){say("HP masih penuh!");return;}
+ potions--;
+ hp=Math.min(maxHp,hp+40);
+ say("Potion digunakan!");
+ updateUI();
+}
+
+// KEYBOARD
+document.addEventListener("keydown",e=>{
+ let k=e.key.toLowerCase();
+
+ if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(k))
+ e.preventDefault();
+
+ keys[k]=true;
+
+ if(k===" "&&!e.repeat)attack();
+ if(k==="1"&&!e.repeat)castFire();
+ if(k==="2"&&!e.repeat)castThunder();
+ if(k==="3"&&!e.repeat)castHeal();
+ if(k==="p"&&!e.repeat)usePotion();
+});
+
+document.addEventListener("keyup",e=>{
+ keys[e.key.toLowerCase()]=false;
+});
+
+// MOBILE
+document.querySelectorAll("[data-key]").forEach(btn=>{
+ let k=btn.dataset.key;
+
+ btn.addEventListener("pointerdown",e=>{
+  e.preventDefault();
+  keys[k]=true;
+ });
+
+ ["pointerup","pointerleave","pointercancel"].forEach(ev=>{
+  btn.addEventListener(ev,()=>keys[k]=false);
+ });
+});
+
+document.getElementById("attack").onclick=attack;
+document.getElementById("fire").onclick=castFire;
+document.getElementById("thunder").onclick=castThunder;
+document.getElementById("heal").onclick=castHeal;
+
+function restart(){
+ hp=100;maxHp=100;
+ mp=100;maxMp=100;
+ coins=0;exp=0;level=1;
+ atk=10;armor=0;potions=3;
+ gameOver=false;won=false;
+ attackCooldown=0;
+ skillCooldown={fire:0,thunder:0,heal:0};
+ keys={};
+ createLevel();
+ say("Petualangan baru dimulai!");
+ updateUI();
+}
+
+createLevel();
+updateUI();
+loop();
+</script>
+</body>
+</html>
